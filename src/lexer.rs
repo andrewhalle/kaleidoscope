@@ -12,6 +12,7 @@ pub enum Token {
     LParen,
     RParen,
     Comma,
+    Semicolon,
     Identifier(String),
     Number(f64),
 }
@@ -122,6 +123,7 @@ impl<C: Iterator<Item = char>> TokenReader<C> {
                 '(' => Token::LParen,
                 ')' => Token::RParen,
                 ',' => Token::Comma,
+                ';' => Token::Semicolon,
                 '*' => Token::Star,
                 c => panic!("Unexpected character. {}", c),
             })

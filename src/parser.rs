@@ -49,7 +49,7 @@ pub struct CallExprAstNode {
     args: Vec<ExprAstNode>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PrototypeAstNode {
     name: String,
     args: Vec<String>,
@@ -176,10 +176,86 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
+    fn parse_prototype(&mut self) -> Result<ExprAstNode, ()> {
+        if !matches!(self.tokens.peek(), Some(Token::Identifier(_))) {
+            return Err(());
+        }
+
+        let name = match self.tokens.next().unwrap() {
+            Token::Identifier(name) => name,
+            _ => unreachable!(),
+        };
+
+        if !matches!(self.tokens.peek(), Some(Token::LParen)) {
+            return Err(());
+        }
+        self.tokens.next();
+
+        let mut args = Vec::new();
+        while let Some(Token::Identifier(_)) = self.tokens.peek() {
+            let name = match self.tokens.next().unwrap() {
+                Token::Identifier(name) => name,
+                _ => unreachable!(),
+            };
+
+            args.push(name);
+        }
+
+        if !matches!(self.tokens.peek(), Some(Token::RParen)) {
+            return Err(());
+        }
+        self.tokens.next();
+
+        Ok(ExprAstNode::Prototype(PrototypeAstNode { name, args }))
+    }
+
+    fn parse_definition(&mut self) -> Result<ExprAstNode, ()> {
+        if !matches!(self.tokens.peek(), Some(Token::Def)) {
+            return Err(());
+        }
+        self.tokens.next();
+
+        let prototype = match self.parse_prototype()? {
+            ExprAstNode::Prototype(prototype) => prototype,
+            _ => unreachable!(),
+        };
+        let body = Box::new(self.parse_expression()?);
+
+        Ok(ExprAstNode::Function(FunctionAstNode { prototype, body }))
+    }
+
+    fn parse_extern(&mut self) -> Result<ExprAstNode, ()> {
+        if !matches!(self.tokens.peek(), Some(Token::Extern)) {
+            return Err(());
+        }
+        self.tokens.next();
+
+        self.parse_prototype()
+    }
+
+    fn parse_top_level_expr(&mut self) -> Result<ExprAstNode, ()> {
+        let body = Box::new(self.parse_expression()?);
+
+        Ok(ExprAstNode::Function(FunctionAstNode {
+            prototype: Default::default(),
+            body,
+        }))
+    }
+
     pub fn parse_expression(&mut self) -> Result<ExprAstNode, ()> {
         let lhs = self.parse_primary()?;
 
         self.parse_bin_op_rhs(0, lhs)
+    }
+
+    pub fn parse_top_level(&mut self) -> Option<ExprAstNode> {
+        match self.tokens.peek() {
+            Some(Token::Eof) => None,
+            Some(Token::Semicolon) => None,
+            Some(Token::Def) => Some(self.parse_definition().unwrap()),
+            Some(Token::Extern) => Some(self.parse_extern().unwrap()),
+            _ => Some(self.parse_top_level_expr().unwrap()),
+        }
     }
 
     pub fn new(tokens: T) -> Self {

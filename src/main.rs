@@ -1,3 +1,5 @@
+use std::io::{self, BufRead, Write};
+
 mod lexer;
 use lexer::TokenReader;
 
@@ -5,13 +7,21 @@ mod parser;
 use parser::Parser;
 
 fn main() {
-    let source = r#"# Compute the x'th fibonacci number.
-1 + func() * 3
-"#;
+    let stdin = io::stdin();
+    let mut stdin = stdin.lock();
+    let mut stdout = io::stdout();
 
-    let token_reader = TokenReader::new(source.chars());
-    let mut parser = Parser::new(token_reader);
+    let mut buf = String::new();
+    loop {
+        buf.clear();
+        print!("ready> ");
+        stdout.flush().unwrap();
 
-    let expr = parser.parse_expression();
-    println!("{:?}", expr);
+        stdin.read_line(&mut buf).unwrap();
+        let token_reader = TokenReader::new(buf.chars());
+        let mut parser = Parser::new(token_reader);
+
+        let expr = parser.parse_top_level();
+        println!("{:#?}", expr);
+    }
 }
