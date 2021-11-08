@@ -27,7 +27,7 @@ pub enum ExprAstNode {
 
 #[derive(Debug)]
 pub struct NumberExprAstNode {
-    value: f64,
+    pub value: f64,
 }
 
 #[derive(Debug)]
@@ -57,8 +57,8 @@ pub struct PrototypeAstNode {
 
 #[derive(Debug)]
 pub struct FunctionAstNode {
-    prototype: PrototypeAstNode,
-    body: Box<ExprAstNode>,
+    pub prototype: PrototypeAstNode,
+    pub body: Box<ExprAstNode>,
 }
 
 #[derive(Debug)]

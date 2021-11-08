@@ -1,10 +1,15 @@
+#![feature(extern_types)]
+
 use std::io::{self, BufRead, Write};
 
 mod lexer;
 use lexer::TokenReader;
 
 mod parser;
-use parser::Parser;
+use parser::{ExprAstNode, FunctionAstNode, Parser};
+
+mod codegen;
+use codegen::CodegenContext;
 
 fn main() {
     let stdin = io::stdin();
@@ -22,6 +27,12 @@ fn main() {
         let mut parser = Parser::new(token_reader);
 
         let expr = parser.parse_top_level();
-        println!("{:#?}", expr);
+        let mut codegen = CodegenContext::new();
+        let number = match expr.unwrap() {
+            ExprAstNode::Function(FunctionAstNode { body, .. }) => body,
+            _ => unreachable!(),
+        };
+        let value = codegen.codegen(*number);
+        codegen::print_value_rust(value);
     }
 }
