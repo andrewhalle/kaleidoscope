@@ -1,37 +1,136 @@
 use std::collections::HashMap;
+use std::ffi::CString;
 
-use crate::parser::{ExprAstNode, NumberExprAstNode};
+use crate::lexer::Token;
+use crate::parser::{BinaryExprAstNode, ExprAstNode, NumberExprAstNode, VariableExprAstNode};
 
-extern "C" {
-    pub type Value;
-    type LlvmContext;
-    type IrBuilder;
-    type Module;
+mod llvm {
+    extern "C" {
+        pub type Value;
+        pub type LlvmContext;
+        pub type IrBuilder;
+        pub type Module;
 
-    fn get_context() -> *mut LlvmContext;
-    fn get_builder(context: *mut LlvmContext) -> *mut IrBuilder;
-    fn get_module(context: *mut LlvmContext) -> *mut Module;
-    fn get_constant_fp(context: *mut LlvmContext, value: f64) -> *mut Value;
-    fn print_value(value: *mut Value);
+        pub fn get_context() -> *mut LlvmContext;
+        pub fn get_builder(context: *mut LlvmContext) -> *mut IrBuilder;
+        pub fn get_module(context: *mut LlvmContext) -> *mut Module;
+        pub fn get_constant_fp(context: *mut LlvmContext, value: f64) -> *mut Value;
+        pub fn print_value(value: *mut Value);
+        pub fn builder_create_f_add(
+            builder: *mut IrBuilder,
+            lhs: *mut Value,
+            rhs: *mut Value,
+            op: *const i8,
+        ) -> *mut Value;
+        pub fn builder_create_f_sub(
+            builder: *mut IrBuilder,
+            lhs: *mut Value,
+            rhs: *mut Value,
+            op: *const i8,
+        ) -> *mut Value;
+        pub fn builder_create_f_mul(
+            builder: *mut IrBuilder,
+            lhs: *mut Value,
+            rhs: *mut Value,
+            op: *const i8,
+        ) -> *mut Value;
+        pub fn builder_create_f_cmp_lt(
+            context: *mut LlvmContext,
+            builder: *mut IrBuilder,
+            lhs: *mut Value,
+            rhs: *mut Value,
+            op: *const i8,
+        ) -> *mut Value;
+    }
 }
 
-pub fn print_value_rust(value: *mut Value) {
-    unsafe { print_value(value) }
+struct IrBuilder {
+    inner: *mut llvm::IrBuilder,
+}
+
+impl IrBuilder {
+    fn create_f_add(
+        &self,
+        lhs: *mut llvm::Value,
+        rhs: *mut llvm::Value,
+        op: &'static str,
+    ) -> *mut llvm::Value {
+        unsafe {
+            let s = CString::new(op).unwrap();
+            llvm::builder_create_f_add(self.inner, lhs, rhs, s.as_ptr())
+        }
+    }
+
+    fn create_f_sub(
+        &self,
+        lhs: *mut llvm::Value,
+        rhs: *mut llvm::Value,
+        op: &'static str,
+    ) -> *mut llvm::Value {
+        unsafe {
+            let s = CString::new(op).unwrap();
+            llvm::builder_create_f_sub(self.inner, lhs, rhs, s.as_ptr())
+        }
+    }
+
+    fn create_f_mul(
+        &self,
+        lhs: *mut llvm::Value,
+        rhs: *mut llvm::Value,
+        op: &'static str,
+    ) -> *mut llvm::Value {
+        unsafe {
+            let s = CString::new(op).unwrap();
+            llvm::builder_create_f_mul(self.inner, lhs, rhs, s.as_ptr())
+        }
+    }
+
+    fn create_f_cmp_lt(
+        &self,
+        context: *mut llvm::LlvmContext,
+        lhs: *mut llvm::Value,
+        rhs: *mut llvm::Value,
+        op: &'static str,
+    ) -> *mut llvm::Value {
+        unsafe {
+            let s = CString::new(op).unwrap();
+            llvm::builder_create_f_cmp_lt(context, self.inner, lhs, rhs, s.as_ptr())
+        }
+    }
+}
+
+pub fn print_value(value: *mut llvm::Value) {
+    unsafe { llvm::print_value(value) }
 }
 
 pub struct CodegenContext {
-    context: *mut LlvmContext,
-    _builder: *mut IrBuilder,
-    _module: *mut Module,
-    _named_values: HashMap<String, *mut Value>,
+    context: *mut llvm::LlvmContext,
+    builder: IrBuilder,
+    _module: *mut llvm::Module,
+    named_values: HashMap<String, *mut llvm::Value>,
 }
 
 impl CodegenContext {
-    pub fn codegen(&mut self, node: ExprAstNode) -> *mut Value {
+    pub fn codegen(&mut self, node: ExprAstNode) -> *mut llvm::Value {
         unsafe {
             match node {
                 ExprAstNode::Number(NumberExprAstNode { value }) => {
-                    get_constant_fp(self.context, value)
+                    llvm::get_constant_fp(self.context, value)
+                }
+                ExprAstNode::Variable(VariableExprAstNode { name }) => self.named_values[&name],
+                ExprAstNode::Binary(BinaryExprAstNode { lhs, rhs, op }) => {
+                    let lhs = self.codegen(*lhs);
+                    let rhs = self.codegen(*rhs);
+                    match op {
+                        Token::Plus => self.builder.create_f_add(lhs, rhs, "addtmp"),
+                        Token::Minus => self.builder.create_f_sub(lhs, rhs, "subtmp"),
+                        Token::Star => self.builder.create_f_mul(lhs, rhs, "multmp"),
+                        Token::LessThan => {
+                            self.builder
+                                .create_f_cmp_lt(self.context, lhs, rhs, "booltmp")
+                        }
+                        _ => todo!(),
+                    }
                 }
                 _ => todo!(),
             }
@@ -40,15 +139,17 @@ impl CodegenContext {
 
     pub fn new() -> Self {
         unsafe {
-            let context = get_context();
-            let module = get_module(context);
-            let builder = get_builder(context);
+            let context = llvm::get_context();
+            let module = llvm::get_module(context);
+            let builder = IrBuilder {
+                inner: llvm::get_builder(context),
+            };
 
             CodegenContext {
                 context,
-                _builder: builder,
+                builder,
                 _module: module,
-                _named_values: HashMap::new(),
+                named_values: HashMap::new(),
             }
         }
     }

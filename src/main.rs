@@ -6,7 +6,7 @@ mod lexer;
 use lexer::TokenReader;
 
 mod parser;
-use parser::{ExprAstNode, FunctionAstNode, Parser};
+use parser::{AstNode, FunctionAstNode, Parser};
 
 mod codegen;
 use codegen::CodegenContext;
@@ -29,10 +29,12 @@ fn main() {
         let expr = parser.parse_top_level();
         let mut codegen = CodegenContext::new();
         let number = match expr.unwrap() {
-            ExprAstNode::Function(FunctionAstNode { body, .. }) => body,
+            AstNode::Function(FunctionAstNode { body, .. }) => body,
             _ => unreachable!(),
         };
         let value = codegen.codegen(*number);
-        codegen::print_value_rust(value);
+        codegen::print_value(value);
+        print!("\n");
+        stdout.flush().unwrap();
     }
 }

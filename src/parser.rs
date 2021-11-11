@@ -21,8 +21,12 @@ pub enum ExprAstNode {
     Variable(VariableExprAstNode),
     Binary(BinaryExprAstNode),
     Call(CallExprAstNode),
-    Prototype(PrototypeAstNode),
+}
+
+#[derive(Debug)]
+pub enum AstNode {
     Function(FunctionAstNode),
+    Prototype(PrototypeAstNode),
 }
 
 #[derive(Debug)]
@@ -32,14 +36,14 @@ pub struct NumberExprAstNode {
 
 #[derive(Debug)]
 pub struct VariableExprAstNode {
-    name: String,
+    pub name: String,
 }
 
 #[derive(Debug)]
 pub struct BinaryExprAstNode {
-    op: Token,
-    lhs: Box<ExprAstNode>,
-    rhs: Box<ExprAstNode>,
+    pub op: Token,
+    pub lhs: Box<ExprAstNode>,
+    pub rhs: Box<ExprAstNode>,
 }
 
 #[derive(Debug)]
@@ -176,7 +180,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    fn parse_prototype(&mut self) -> Result<ExprAstNode, ()> {
+    fn parse_prototype(&mut self) -> Result<PrototypeAstNode, ()> {
         if !matches!(self.tokens.peek(), Some(Token::Identifier(_))) {
             return Err(());
         }
@@ -206,25 +210,22 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
         self.tokens.next();
 
-        Ok(ExprAstNode::Prototype(PrototypeAstNode { name, args }))
+        Ok(PrototypeAstNode { name, args })
     }
 
-    fn parse_definition(&mut self) -> Result<ExprAstNode, ()> {
+    fn parse_definition(&mut self) -> Result<FunctionAstNode, ()> {
         if !matches!(self.tokens.peek(), Some(Token::Def)) {
             return Err(());
         }
         self.tokens.next();
 
-        let prototype = match self.parse_prototype()? {
-            ExprAstNode::Prototype(prototype) => prototype,
-            _ => unreachable!(),
-        };
+        let prototype = self.parse_prototype()?;
         let body = Box::new(self.parse_expression()?);
 
-        Ok(ExprAstNode::Function(FunctionAstNode { prototype, body }))
+        Ok(FunctionAstNode { prototype, body })
     }
 
-    fn parse_extern(&mut self) -> Result<ExprAstNode, ()> {
+    fn parse_extern(&mut self) -> Result<PrototypeAstNode, ()> {
         if !matches!(self.tokens.peek(), Some(Token::Extern)) {
             return Err(());
         }
@@ -233,10 +234,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.parse_prototype()
     }
 
-    fn parse_top_level_expr(&mut self) -> Result<ExprAstNode, ()> {
+    fn parse_top_level_expr(&mut self) -> Result<AstNode, ()> {
         let body = Box::new(self.parse_expression()?);
 
-        Ok(ExprAstNode::Function(FunctionAstNode {
+        Ok(AstNode::Function(FunctionAstNode {
             prototype: Default::default(),
             body,
         }))
@@ -248,12 +249,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.parse_bin_op_rhs(0, lhs)
     }
 
-    pub fn parse_top_level(&mut self) -> Option<ExprAstNode> {
+    pub fn parse_top_level(&mut self) -> Option<AstNode> {
         match self.tokens.peek() {
             Some(Token::Eof) => None,
             Some(Token::Semicolon) => None,
-            Some(Token::Def) => Some(self.parse_definition().unwrap()),
-            Some(Token::Extern) => Some(self.parse_extern().unwrap()),
+            Some(Token::Def) => Some(AstNode::Function(self.parse_definition().unwrap())),
+            Some(Token::Extern) => Some(AstNode::Prototype(self.parse_extern().unwrap())),
             _ => Some(self.parse_top_level_expr().unwrap()),
         }
     }
