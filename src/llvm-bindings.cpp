@@ -67,4 +67,46 @@ extern "C" {
   ) {
     return builder->CreateCall(function, ArrayRef<Value*>(arg_buf, arg_size), name);
   }
+
+  Function* module_create_function(
+      LLVMContext* context,
+      Module* mod,
+      const char* name,
+      const char** args,
+      size_t arg_size
+  ) {
+    std::vector<Type*> Doubles(arg_size, Type::getDoubleTy(*context));
+    FunctionType* FT = FunctionType::get(Type::getDoubleTy(*context), Doubles, false);
+    Function* F = Function::Create(FT, Function::ExternalLinkage, name, mod);
+
+    // Set names for all arguments.
+    unsigned Idx = 0;
+    for (auto &Arg : F->args())
+      Arg.setName(args[Idx++]);
+
+    return F;
+  }
+
+  void create_function_body(LLVMContext* context, Function* function, IRBuilder<>* builder) {
+    BasicBlock* BB = BasicBlock::Create(*context, "entry", function);
+    builder->SetInsertPoint(BB);
+  }
+
+  // I'm going to leak ALL THE MEMORY
+  Value** get_function_args(Function* function) {
+    std::vector<Value*>* args = new std::vector<Value*>;
+    for (auto& arg : function->args()) {
+      args->push_back(&arg);
+    }
+
+    return args->data();
+  }
+
+  void builder_create_ret(IRBuilder<>* builder, Value* value) {
+    builder->CreateRet(value);
+  }
+
+  void print_function(Function* function) {
+    function->print(outs(), nullptr, false, true);
+  }
 }

@@ -54,8 +54,8 @@ pub struct CallExprAstNode {
 
 #[derive(Debug, Default)]
 pub struct PrototypeAstNode {
-    name: String,
-    args: Vec<String>,
+    pub name: String,
+    pub args: Vec<String>,
 }
 
 #[derive(Debug)]
