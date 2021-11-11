@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::ffi::CString;
 
 use crate::lexer::Token;
-use crate::parser::{BinaryExprAstNode, ExprAstNode, NumberExprAstNode, VariableExprAstNode};
+use crate::parser::{
+    BinaryExprAstNode, CallExprAstNode, ExprAstNode, NumberExprAstNode, VariableExprAstNode,
+};
 
 mod llvm {
     extern "C" {
@@ -10,6 +12,7 @@ mod llvm {
         pub type LlvmContext;
         pub type IrBuilder;
         pub type Module;
+        pub type Function;
 
         pub fn get_context() -> *mut LlvmContext;
         pub fn get_builder(context: *mut LlvmContext) -> *mut IrBuilder;
@@ -41,6 +44,27 @@ mod llvm {
             rhs: *mut Value,
             op: *const i8,
         ) -> *mut Value;
+        pub fn module_get_function(module: *mut Module, name: *const i8) -> *mut Function;
+        pub fn builder_create_call(
+            builder: *mut IrBuilder,
+            function: *mut Function,
+            arg_buf: *mut *mut Value,
+            arg_size: usize,
+            name: *const i8,
+        ) -> *mut Value;
+    }
+}
+
+struct Module {
+    inner: *mut llvm::Module,
+}
+
+impl Module {
+    fn get_function(&mut self, name: &str) -> *mut llvm::Function {
+        unsafe {
+            let s = CString::new(name).unwrap();
+            llvm::module_get_function(self.inner, s.as_ptr())
+        }
     }
 }
 
@@ -97,6 +121,23 @@ impl IrBuilder {
             llvm::builder_create_f_cmp_lt(context, self.inner, lhs, rhs, s.as_ptr())
         }
     }
+
+    fn create_call(
+        &self,
+        function: *mut llvm::Function,
+        mut args: Vec<*mut llvm::Value>,
+    ) -> *mut llvm::Value {
+        unsafe {
+            let s = CString::new("calltmp").unwrap();
+            llvm::builder_create_call(
+                self.inner,
+                function,
+                args.as_mut_ptr(),
+                args.len(),
+                s.as_ptr(),
+            )
+        }
+    }
 }
 
 pub fn print_value(value: *mut llvm::Value) {
@@ -106,7 +147,7 @@ pub fn print_value(value: *mut llvm::Value) {
 pub struct CodegenContext {
     context: *mut llvm::LlvmContext,
     builder: IrBuilder,
-    _module: *mut llvm::Module,
+    module: Module,
     named_values: HashMap<String, *mut llvm::Value>,
 }
 
@@ -129,10 +170,16 @@ impl CodegenContext {
                             self.builder
                                 .create_f_cmp_lt(self.context, lhs, rhs, "booltmp")
                         }
-                        _ => todo!(),
+                        _ => unreachable!(),
                     }
                 }
-                _ => todo!(),
+                ExprAstNode::Call(CallExprAstNode { callee, args }) => {
+                    let function = self.module.get_function(&callee);
+                    let args: Vec<*mut llvm::Value> =
+                        args.into_iter().map(|arg| self.codegen(arg)).collect();
+
+                    self.builder.create_call(function, args)
+                }
             }
         }
     }
@@ -140,7 +187,9 @@ impl CodegenContext {
     pub fn new() -> Self {
         unsafe {
             let context = llvm::get_context();
-            let module = llvm::get_module(context);
+            let module = Module {
+                inner: llvm::get_module(context),
+            };
             let builder = IrBuilder {
                 inner: llvm::get_builder(context),
             };
@@ -148,7 +197,7 @@ impl CodegenContext {
             CodegenContext {
                 context,
                 builder,
-                _module: module,
+                module,
                 named_values: HashMap::new(),
             }
         }

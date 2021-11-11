@@ -30,15 +30,15 @@ extern "C" {
     value->print(outs(), true);
   }
 
-  Value* builder_create_f_add(IRBuilder<>* builder, Value* lhs, Value* rhs, char const* op) {
+  Value* builder_create_f_add(IRBuilder<>* builder, Value* lhs, Value* rhs, const char* op) {
     return builder->CreateFAdd(lhs, rhs, op);
   }
 
-  Value* builder_create_f_sub(IRBuilder<>* builder, Value* lhs, Value* rhs, char const* op) {
+  Value* builder_create_f_sub(IRBuilder<>* builder, Value* lhs, Value* rhs, const char* op) {
     return builder->CreateFSub(lhs, rhs, op);
   }
 
-  Value* builder_create_f_mul(IRBuilder<>* builder, Value* lhs, Value* rhs, char const* op) {
+  Value* builder_create_f_mul(IRBuilder<>* builder, Value* lhs, Value* rhs, const char* op) {
     return builder->CreateFMul(lhs, rhs, op);
   }
 
@@ -52,5 +52,19 @@ extern "C" {
   ) {
     lhs = builder->CreateFCmpULT(lhs, rhs, "cmptmp");
     return builder->CreateUIToFP(lhs, Type::getDoubleTy(*context), op);
+  }
+
+  Function* module_get_function(Module* module, const char* name) {
+    return module->getFunction(name);
+  }
+
+  Value* builder_create_call(
+      IRBuilder<>* builder,
+      Function* function,
+      Value** arg_buf,
+      size_t arg_size,
+      const char* name
+  ) {
+    return builder->CreateCall(function, ArrayRef<Value*>(arg_buf, arg_size), name);
   }
 }

@@ -16,7 +16,6 @@ fn precedence(token: Option<&Token>) -> Option<u8> {
 
 #[derive(Debug)]
 pub enum ExprAstNode {
-    Null,
     Number(NumberExprAstNode),
     Variable(VariableExprAstNode),
     Binary(BinaryExprAstNode),
@@ -49,8 +48,8 @@ pub struct BinaryExprAstNode {
 #[derive(Debug)]
 pub struct CallExprAstNode {
     // should this be an ExprAstNode?
-    callee: String,
-    args: Vec<ExprAstNode>,
+    pub callee: String,
+    pub args: Vec<ExprAstNode>,
 }
 
 #[derive(Debug, Default)]
@@ -86,7 +85,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         if self.tokens.peek() == Some(&Token::RParen) {
-            return Ok(ExprAstNode::Null);
+            return Err(());
         }
         let expr = self.parse_expression()?;
 
